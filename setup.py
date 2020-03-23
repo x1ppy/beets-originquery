@@ -16,5 +16,6 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=[
         "beets>=1.5.0",
+        "jsonpath-rw",
     ],
 )

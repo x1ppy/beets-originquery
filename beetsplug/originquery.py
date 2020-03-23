@@ -1,3 +1,5 @@
+import json
+import jsonpath_rw
 import os
 import re
 import sys
@@ -65,19 +67,39 @@ class OriginQuery(BeetsPlugin):
             if not isinstance(config_patterns, dict):
                 raise Exception()
         except:
-            return fail('Config error: originquery.tag_patterns must be set to a dictionary of key -> regex mappings.')
+            return fail('Config error: originquery.tag_patterns must be set to a dictionary of key -> pattern mappings.')
 
+        try:
+            self.origin_file = self.config['origin_file'].get()
+        except:
+            return fail('Config error: originquery.origin_file not set.')
         self.tag_patterns = {}
+
+        is_json = self.origin_file.endswith('.json')
+        if is_json:
+            self.match_fn = self.match_json
+        else:
+            self.match_fn = self.match_text
+
         for key, pattern in config_patterns.items():
+            if key not in BEETS_TO_LABEL:
+                return fail('Config error: unknown key "{0}"'.format(key))
+                self.error('Plugin disabled.')
+
+            if is_json:
+                try:
+                    self.tag_patterns[key] = jsonpath_rw.parse(pattern)
+                except Exception as e:
+                    return fail('Config error: invalid tag pattern for "{0}". "{1}" is not a valid JSON path ({2}).'
+                                .format(key, pattern, format(str(e))))
+                continue
+
             try:
                 regex = re.compile(pattern)
                 self.tag_patterns[key] = regex
             except re.error as e:
                 return fail('Config error: invalid tag pattern for "{0}". "{1}" is not a valid regex ({2}).'
                             .format(key, pattern, format(str(e))))
-            if key not in BEETS_TO_LABEL:
-                return fail('Config error: unknown key "{0}"'.format(key))
-                self.error('Plugin disabled.')
             if regex.groups != 1:
                 return fail('Config error: invalid tag pattern for "{0}". "{1}" must have exactly one capture group.'
                             .format(key, pattern))
@@ -86,7 +108,6 @@ class OriginQuery(BeetsPlugin):
         self.register_listener('before_choose_candidate', self.before_choose_candidate)
         self.tasks = {}
         self.use_origin_on_conflict = self.config['use_origin_on_conflict'].get(False)
-        self.origin_file = self.config['origin_file'].get('origin.txt')
 
     def error(self, msg):
         self._log.error(escape_braces(ui.colorize('text_error', msg)))
@@ -137,6 +158,28 @@ class OriginQuery(BeetsPlugin):
         if conflict:
             self.warn("Origin data conflicts with tagged data.")
 
+    def match_text(self, origin_path):
+        with open(origin_path) as f:
+            lines = f.readlines()
+
+        for key, pattern in self.tag_patterns.items():
+            for line in lines:
+                line = line.strip()
+                match = re.match(pattern, line)
+                if not match:
+                    continue
+                yield key, match[1]
+
+    def match_json(self, origin_path):
+        with open(origin_path) as f:
+            data = json.load(f)
+
+        for key, pattern in self.tag_patterns.items():
+            match = pattern.find(data)
+            if not len(match):
+                continue
+            yield key, str(match[0].value)
+
     def import_task_start(self, task, session):
         task_info = self.tasks[task] = {}
 
@@ -149,9 +192,6 @@ class OriginQuery(BeetsPlugin):
             task_info['missing_origin'] = True
             return
 
-        with open(origin_path) as f:
-            lines = f.readlines()
-
         conflict = False
         likelies, consensus = current_metadata(task.items)
         task_info['tag_compare'] = tag_compare = OrderedDict()
@@ -162,25 +202,22 @@ class OriginQuery(BeetsPlugin):
                 'origin': '',
             }})
 
-        for key, pattern in self.tag_patterns.items():
-            for line in lines:
-                line = line.strip()
-                match = re.match(pattern, line)
-                if not match or match[1] == '-' or tag_compare[key]['origin']:
-                    continue
+        for key, value in self.match_fn(origin_path):
+            if value == '-' or tag_compare[key]['origin']:
+                continue
 
-                tagged_value = tag_compare[key]['tagged']
-                origin_value = sanitize_value(key, match[1])
-                tag_compare[key]['origin'] = origin_value
-                if key not in CONFLICT_FIELDS or not tagged_value or not origin_value:
-                    continue
+            tagged_value = tag_compare[key]['tagged']
+            origin_value = sanitize_value(key, value)
+            tag_compare[key]['origin'] = origin_value
+            if key not in CONFLICT_FIELDS or not tagged_value or not origin_value:
+                continue
 
-                if key == 'catalognum':
-                    tagged_value = normalize_catno(tagged_value)
-                    origin_value = normalize_catno(origin_value)
+            if key == 'catalognum':
+                tagged_value = normalize_catno(tagged_value)
+                origin_value = normalize_catno(origin_value)
 
-                if tagged_value != origin_value:
-                    conflict = task_info['conflict'] = True
+            if tagged_value != origin_value:
+                conflict = task_info['conflict'] = True
 
         if not conflict or self.use_origin_on_conflict:
             # Update all item with origin metadata.
