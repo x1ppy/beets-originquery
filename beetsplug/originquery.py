@@ -100,13 +100,15 @@ class OriginQuery(BeetsPlugin):
 
         if task_info.get('missing_origin', False):
             self.warn('No origin file found at {0}'.format(origin_path))
+            return
         else:
             self.info('Using origin file {0}'.format(origin_path))
 
-        use_tagged = task_info.get('conflict', False) and not self.use_origin_on_conflict
-        self.print_tags(task_info['tag_compare'].items(), use_tagged)
+        conflict = task_info.get('conflict', False)
+        use_tagged = conflict and not self.use_origin_on_conflict
+        self.print_tags(task_info.get('tag_compare').items(), use_tagged)
 
-        if task_info.get('conflict', False):
+        if conflict:
             self.warn("Origin data conflicts with tagged data.")
 
     def import_task_start(self, task, session):
