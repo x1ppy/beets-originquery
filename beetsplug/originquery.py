@@ -1,11 +1,12 @@
 import os
 import re
+import sys
 from collections import OrderedDict
 from beets import config, ui
 from beets.autotag.match import current_metadata
 from beets.plugins import BeetsPlugin
 
-BEETS_TO_ORIGIN = OrderedDict([
+BEETS_TO_LABEL = OrderedDict([
     ('media', 'Media'),
     ('year', 'Edition year'),
     ('country', 'Country'),
@@ -13,7 +14,6 @@ BEETS_TO_ORIGIN = OrderedDict([
     ('catalognum', 'Catalog number'),
     ('albumdisambig', 'Edition'),
 ])
-ORIGIN_TO_BEETS = {v: k for k, v in BEETS_TO_ORIGIN.items()}
 
 # Conflicts will be reported if any of these fields don't match.
 CONFLICT_FIELDS = ['catalognum', 'media']
@@ -47,23 +47,49 @@ class OriginQuery(BeetsPlugin):
     def __init__(self):
         super(OriginQuery, self).__init__()
 
+        def fail(msg):
+            self.error(msg)
+            self.error('Plugin disabled.')
+
         try:
             self.extra_tags = config['musicbrainz']['extra_tags'].get()
         except:
-            self._log.error(ui.colorize('text_error', 'This version of beets does not support extra query tags.'))
-            self._log.error(ui.colorize('text_error', 'Plugin disabled.'))
-            return
+            return fail('This version of beets does not support extra query tags.')
 
         if not len(self.extra_tags):
-            self._log.error(ui.colorize('text_error', 'musicbrainz.extra_tags not set in config.'))
-            self._log.error(ui.colorize('text_error', 'Plugin disabled.'))
-            return
+            return fail('Config error: musicbrainz.extra_tags not set.')
+
+        config_patterns = None
+        try:
+            config_patterns = self.config['tag_patterns'].get()
+            if not isinstance(config_patterns, dict):
+                raise Exception()
+        except:
+            return fail('Config error: originquery.tag_patterns must be set to a dictionary of key -> regex mappings.')
+
+        self.tag_patterns = {}
+        for key, pattern in config_patterns.items():
+            try:
+                regex = re.compile(pattern)
+                self.tag_patterns[key] = regex
+            except re.error as e:
+                return fail('Config error: invalid tag pattern for "{0}". "{1}" is not a valid regex ({2}).'
+                            .format(key, pattern, format(str(e))))
+            if key not in BEETS_TO_LABEL:
+                return fail('Config error: unknown key "{0}"'.format(key))
+                self.error('Plugin disabled.')
+            if regex.groups != 1:
+                return fail('Config error: invalid tag pattern for "{0}". "{1}" must have exactly one capture group.'
+                            .format(key, pattern))
 
         self.register_listener('import_task_start', self.import_task_start)
         self.register_listener('before_choose_candidate', self.before_choose_candidate)
         self.tasks = {}
         self.use_origin_on_conflict = self.config['use_origin_on_conflict'].get(False)
         self.origin_file = self.config['origin_file'].get('origin.txt')
+
+    def error(self, msg):
+        self._log.error(escape_braces(ui.colorize('text_error', msg)))
 
     def warn(self, msg):
         self._log.warning(escape_braces(ui.colorize('text_warning', msg)))
@@ -75,7 +101,7 @@ class OriginQuery(BeetsPlugin):
     def print_tags(self, items, use_tagged):
         headers = ['Field', 'Tagged Data', 'Origin Data']
 
-        w_key = max(len(headers[0]), *(len(BEETS_TO_ORIGIN[k]) for k, v in items))
+        w_key = max(len(headers[0]), *(len(BEETS_TO_LABEL[k]) for k, v in items))
         w_tagged = max(len(headers[1]), *(len(v['tagged']) for k, v in items))
         w_origin = max(len(headers[2]), *(len(v['origin']) for k, v in items))
 
@@ -89,7 +115,7 @@ class OriginQuery(BeetsPlugin):
                 continue
             tagged_active = use_tagged and v['active']
             origin_active = not use_tagged and v['active']
-            self.info('║ {0} │ {1} │ {2} ║'.format(BEETS_TO_ORIGIN[k].ljust(w_key),
+            self.info('║ {0} │ {1} │ {2} ║'.format(BEETS_TO_LABEL[k].ljust(w_key),
                                                    highlight(v['tagged'].ljust(w_tagged), tagged_active),
                                                    highlight(v['origin'].ljust(w_origin), origin_active)))
         self.info('╚{0}╧{1}╧{2}╝'.format('═' * (w_key + 2), '═' * (w_tagged + 2), '═' * (w_origin + 2)))
@@ -129,26 +155,23 @@ class OriginQuery(BeetsPlugin):
         conflict = False
         likelies, consensus = current_metadata(task.items)
         task_info['tag_compare'] = tag_compare = OrderedDict()
-        for tag in BEETS_TO_ORIGIN:
+        for tag in self.tag_patterns:
             tag_compare.update({tag: {
                 'tagged': str(likelies[tag]),
                 'active': tag in self.extra_tags,
                 'origin': '',
             }})
 
-        for line in lines:
-            line = line.strip()
-            match = re.match(r'(.+?) {2,}(.+)', line)
-            if not match:
-                break
-            if match[2] == '-':
-                continue
-            key = ORIGIN_TO_BEETS.get(match[1])
-            if key:
-                tagged_value = tag_compare[key]['tagged']
-                origin_value = sanitize_value(key, match[2])
-                tag_compare[key]['origin'] = origin_value
+        for key, pattern in self.tag_patterns.items():
+            for line in lines:
+                line = line.strip()
+                match = re.match(pattern, line)
+                if not match or match[1] == '-' or tag_compare[key]['origin']:
+                    continue
 
+                tagged_value = tag_compare[key]['tagged']
+                origin_value = sanitize_value(key, match[1])
+                tag_compare[key]['origin'] = origin_value
                 if key not in CONFLICT_FIELDS or not tagged_value or not origin_value:
                     continue
 
