@@ -31,9 +31,7 @@ an official beets release. Until beets v1.5.0 is released with [the commit addin
 feature](https://github.com/beetbox/beets/commit/8ed76f1198c23b9205c6f566860a35569945d4bb), you must install the latest
 beets manually:
 
-    $> git clone https://github.com/beetbox/beets
-    $> cd beets
-    $> pip install .
+    $> pip install git+https://github.com/beetbox/beets
     $> beet --version
     beets version 1.5.0
 
