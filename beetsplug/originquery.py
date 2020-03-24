@@ -75,7 +75,7 @@ class OriginQuery(BeetsPlugin):
             return fail('Config error: originquery.origin_file not set.')
         self.tag_patterns = {}
 
-        is_json = self.origin_file.endswith('.json')
+        is_json = self.origin_file.lower().endswith('.json')
         if is_json:
             self.match_fn = self.match_json
         else:
@@ -195,7 +195,7 @@ class OriginQuery(BeetsPlugin):
         conflict = False
         likelies, consensus = current_metadata(task.items)
         task_info['tag_compare'] = tag_compare = OrderedDict()
-        for tag in self.tag_patterns:
+        for tag in BEETS_TO_LABEL:
             tag_compare.update({tag: {
                 'tagged': str(likelies[tag]),
                 'active': tag in self.extra_tags,
