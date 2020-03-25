@@ -65,7 +65,8 @@ Your beets configuration must contain a section with the following fields:
             <tag2>: <pattern2>
 
 The `origin_file` supports glob wildcard characters. So, for instance, if you use a date scheme for your origin file
-naming (e.g., `origin-2020025.txt`), you could specify `origin_file: 'origin-*.txt'` here.
+naming (e.g., `origin-2020025.txt`), you could specify `origin_file: 'origin-*.txt'` here. If the pattern matches
+multiple files, the first file in the alphanumerically sorted list of results will be used.
 
 The tags under `tag_patterns` can be any combination of the following tags:
 * `media` (CD, vinyl, …)
