@@ -64,6 +64,9 @@ Your beets configuration must contain a section with the following fields:
             <tag1>: <pattern1>
             <tag2>: <pattern2>
 
+The `origin_file` supports glob wildcard characters. So, for instance, if you use a date scheme for your origin file
+naming (e.g., `origin-2020025.txt`), you could specify `origin_file: 'origin-*.txt'` here.
+
 The tags under `tag_patterns` can be any combination of the following tags:
 * `media` (CD, vinyl, …)
 * `year` (edition year, _not_ original release year)
@@ -231,3 +234,13 @@ By default, `originquery` uses the _tagged data_ in the case of a conflict. This
     originquery:
         ...
         use_origin_on_conflict: yes
+
+Changelog
+---------
+### [1.0.1] - 2020-03-25
+* Added support for glob patterns in `origin_file`
+### [1.0.0] - 2020-03-23
+* Initial release
+
+[1.0.1]: https://github.com/x1ppy/beets-originquery/compare/1.0.0...1.0.1
+[1.0.0]: https://github.com/x1ppy/beets-originquery/releases/tag/1.0.0

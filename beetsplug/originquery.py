@@ -1,3 +1,4 @@
+import glob
 import json
 import jsonpath_rw
 import os
@@ -184,13 +185,15 @@ class OriginQuery(BeetsPlugin):
         task_info = self.tasks[task] = {}
 
         # In case this is a multi-disc import, find the common parent directory.
-        base = os.path.commonpath(task.paths)
-        origin_path = os.path.join(base.decode('utf8'), self.origin_file)
-        task_info['origin_path'] = origin_path
+        base = os.path.commonpath(task.paths).decode('utf8')
 
-        if not os.path.exists(origin_path):
+        glob_pattern = os.path.join(glob.escape(base), self.origin_file)
+        origin_glob = sorted(glob.glob(glob_pattern))
+        if len(origin_glob) < 1:
+            task_info['origin_path'] = os.path.join(base, self.origin_file)
             task_info['missing_origin'] = True
             return
+        task_info['origin_path'] = origin_path = origin_glob[0]
 
         conflict = False
         likelies, consensus = current_metadata(task.items)
