@@ -1,13 +1,16 @@
+import confuse
 import glob
 import json
 import jsonpath_rw
 import os
 import re
 import sys
+import yaml
 from collections import OrderedDict
 from beets import config, ui
 from beets.autotag.match import current_metadata
 from beets.plugins import BeetsPlugin
+from pathlib import Path
 
 BEETS_TO_LABEL = OrderedDict([
     ('media', 'Media'),
@@ -56,7 +59,7 @@ class OriginQuery(BeetsPlugin):
 
         try:
             self.extra_tags = config['musicbrainz']['extra_tags'].get()
-        except:
+        except confuse.NotFoundError:
             return fail('This version of beets does not support extra query tags.')
 
         if not len(self.extra_tags):
@@ -66,19 +69,25 @@ class OriginQuery(BeetsPlugin):
         try:
             config_patterns = self.config['tag_patterns'].get()
             if not isinstance(config_patterns, dict):
-                raise Exception()
-        except:
+                raise confuse.ConfigError()
+        except confuse.ConfigError:
             return fail('Config error: originquery.tag_patterns must be set to a dictionary of key -> pattern mappings.')
 
         try:
-            self.origin_file = self.config['origin_file'].get()
-        except:
+            self.origin_file = Path(self.config['origin_file'].get())
+        except confuse.NotFoundError:
             return fail('Config error: originquery.origin_file not set.')
         self.tag_patterns = {}
 
-        is_json = self.origin_file.lower().endswith('.json')
-        if is_json:
+        try:
+            origin_type = self.config['origin_type'].as_choice(['yaml', 'json', 'text']).lower()
+        except confuse.NotFoundError:
+            origin_type = self.origin_file.suffix.lower()[1:]
+
+        if origin_type == 'json':
             self.match_fn = self.match_json
+        elif origin_type == 'yaml':
+            self.match_fn = self.match_yaml
         else:
             self.match_fn = self.match_text
 
@@ -87,7 +96,7 @@ class OriginQuery(BeetsPlugin):
                 return fail('Config error: unknown key "{0}"'.format(key))
                 self.error('Plugin disabled.')
 
-            if is_json:
+            if origin_type == 'json' or origin_type == 'yaml':
                 try:
                     self.tag_patterns[key] = jsonpath_rw.parse(pattern)
                 except Exception as e:
@@ -108,17 +117,25 @@ class OriginQuery(BeetsPlugin):
         self.register_listener('import_task_start', self.import_task_start)
         self.register_listener('before_choose_candidate', self.before_choose_candidate)
         self.tasks = {}
-        self.use_origin_on_conflict = self.config['use_origin_on_conflict'].get(False)
+
+        try:
+            self.use_origin_on_conflict = self.config['use_origin_on_conflict'].get(bool)
+        except confuse.NotFoundError:
+            self.use_origin_on_conflict = False
+
 
     def error(self, msg):
         self._log.error(escape_braces(ui.colorize('text_error', msg)))
 
+
     def warn(self, msg):
         self._log.warning(escape_braces(ui.colorize('text_warning', msg)))
+
 
     def info(self, msg):
         # beets defaults to log level warning for event handlers.
         self._log.warning(escape_braces(msg))
+
 
     def print_tags(self, items, use_tagged):
         headers = ['Field', 'Tagged Data', 'Origin Data']
@@ -142,6 +159,7 @@ class OriginQuery(BeetsPlugin):
                                                    highlight(v['origin'].ljust(w_origin), origin_active)))
         self.info('╚{0}╧{1}╧{2}╝'.format('═' * (w_key + 2), '═' * (w_tagged + 2), '═' * (w_origin + 2)))
 
+
     def before_choose_candidate(self, task, session):
         task_info = self.tasks[task]
         origin_path = task_info['origin_path']
@@ -159,6 +177,7 @@ class OriginQuery(BeetsPlugin):
         if conflict:
             self.warn("Origin data conflicts with tagged data.")
 
+
     def match_text(self, origin_path):
         with open(origin_path) as f:
             lines = f.readlines()
@@ -171,6 +190,7 @@ class OriginQuery(BeetsPlugin):
                     continue
                 yield key, match[1]
 
+
     def match_json(self, origin_path):
         with open(origin_path) as f:
             data = json.load(f)
@@ -179,7 +199,21 @@ class OriginQuery(BeetsPlugin):
             match = pattern.find(data)
             if not len(match):
                 continue
+
             yield key, str(match[0].value)
+
+
+    def match_yaml(self, origin_path):
+        with open(origin_path) as f:
+            data = yaml.load(f, Loader=yaml.BaseLoader)
+
+        for key, pattern in self.tag_patterns.items():
+            match = pattern.find(data)
+            if not len(match):
+                continue
+
+            yield key, str(match[0].value)
+
 
     def import_task_start(self, task, session):
         task_info = self.tasks[task] = {}
@@ -190,10 +224,10 @@ class OriginQuery(BeetsPlugin):
         glob_pattern = os.path.join(glob.escape(base), self.origin_file)
         origin_glob = sorted(glob.glob(glob_pattern))
         if len(origin_glob) < 1:
-            task_info['origin_path'] = os.path.join(base, self.origin_file)
+            task_info['origin_path'] = Path(base) / self.origin_file
             task_info['missing_origin'] = True
             return
-        task_info['origin_path'] = origin_path = origin_glob[0]
+        task_info['origin_path'] = origin_path = Path(origin_glob[0])
 
         conflict = False
         likelies, consensus = current_metadata(task.items)

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="beets-originquery",
-    version="1.0.1",
+    version="1.0.2",
     author="x1ppy",
     packages=['beetsplug'],
     author_email="",
@@ -16,6 +16,8 @@ setuptools.setup(
     python_requires='>=3.6',
     install_requires=[
         "beets>=1.5.0",
+        "confuse",
         "jsonpath-rw",
+        "pyyaml",
     ],
 )

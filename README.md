@@ -53,7 +53,7 @@ Configuration
 -------------
 
 `originquery` reads an _origin file_ at the root of each album directory when music is imported. The origin file can be
-either a text or JSON file. Beyond that, the format of the file is entirely user-defined and is specified in the
+either a text, JSON, or YAML file. Beyond that, the format of the file is entirely user-defined and is specified in the
 `originquery` configuration.
 
 Your beets configuration must contain a section with the following fields:
@@ -76,7 +76,16 @@ The tags under `tag_patterns` can be any combination of the following tags:
 * `catalognum` (ABC-XYZ, 102030, …)
 * `albumdisambig` (Remastered, Deluxe Edition, …)
 
-The patterns used will depend on whether your origin file is a text file or JSON file, as outlined below.
+By default, the origin file parser will be determined by its file extension. `.yaml` will be parsed as YAML, `.json`
+will be parsed as JSON, and generic text parsing will be used otherwise. If your file format doesn't match its
+extension, you can override the file type with the `origin_type` config option, setting the type to either `yaml`,
+`json`, or `text`:
+
+    originquery:
+        ...
+        origin_type: <yaml|json|text>
+
+The patterns used will depend on your origin file type as outlined below.
 
 ### Text files
 
@@ -136,8 +145,23 @@ and `catalognum` tags will be parsed from this file and used by beets to query M
 value mappings would be defined in an object literal under the `mydata` key at the root of the object as shown in the
 example. Of course, you're free to use a completely different schema if you update the patterns accordingly.
 
+### YAML files
+
+Like JSON origin files, YAML files use [JSONPath](https://goessner.net/articles/JsonPath/) for `tag_patterns`.
+
+For example, with origin files that look like the following:
+
+    mydata:
+      media: CD
+      year: 1988
+      label: Mobile Fidelity Sound Lab
+      catalognum: UDCD 517
+
+YAML files use the same JSONPath-style `tag_patterns` section as JSON files (see above), except `origin_file` would
+of course point to `origin.yaml` instead of `origin.json`.
+
 Examples
------
+--------
 
 ### Before `originquery`
 
@@ -238,10 +262,13 @@ By default, `originquery` uses the _tagged data_ in the case of a conflict. This
 
 Changelog
 ---------
+### [1.0.2] - 2020-04-06
+* Added support for YAML origin files
 ### [1.0.1] - 2020-03-25
 * Added support for glob patterns in `origin_file`
 ### [1.0.0] - 2020-03-23
 * Initial release
 
+[1.0.2]: https://github.com/x1ppy/beets-originquery/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/x1ppy/beets-originquery/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/x1ppy/beets-originquery/releases/tag/1.0.0
