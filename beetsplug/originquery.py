@@ -205,13 +205,12 @@ class OriginQuery(BeetsPlugin):
 
     def match_yaml(self, origin_path):
         with open(origin_path) as f:
-            data = yaml.load(f, Loader=yaml.BaseLoader)
+            data = yaml.load(f, Loader=yaml.SafeLoader)
 
         for key, pattern in self.tag_patterns.items():
             match = pattern.find(data)
-            if not len(match):
+            if not len(match) or not match[0].value:
                 continue
-
             yield key, str(match[0].value)
 
 
@@ -240,7 +239,7 @@ class OriginQuery(BeetsPlugin):
             }})
 
         for key, value in self.match_fn(origin_path):
-            if value == '-' or tag_compare[key]['origin']:
+            if tag_compare[key]['origin']:
                 continue
 
             tagged_value = tag_compare[key]['tagged']
