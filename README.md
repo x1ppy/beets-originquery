@@ -157,8 +157,8 @@ For example, with origin files that look like the following:
       label: Mobile Fidelity Sound Lab
       catalognum: UDCD 517
 
-YAML files use the same JSONPath-style `tag_patterns` section as JSON files (see above), except `origin_file` would
-of course point to `origin.yaml` instead of `origin.json`.
+you would use the same JSONPath-based `tag_patterns` config as JSON files (see above). `origin_file` would of course
+point to `origin.yaml` instead of `origin.json`.
 
 Examples
 --------
