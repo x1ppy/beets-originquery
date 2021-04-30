@@ -179,7 +179,7 @@ class OriginQuery(BeetsPlugin):
 
 
     def match_text(self, origin_path):
-        with open(origin_path) as f:
+        with open(origin_path, encoding="utf-8") as f:
             lines = f.readlines()
 
         for key, pattern in self.tag_patterns.items():
@@ -192,7 +192,7 @@ class OriginQuery(BeetsPlugin):
 
 
     def match_json(self, origin_path):
-        with open(origin_path) as f:
+        with open(origin_path, encoding="utf-8") as f:
             data = json.load(f)
 
         for key, pattern in self.tag_patterns.items():
@@ -204,7 +204,7 @@ class OriginQuery(BeetsPlugin):
 
 
     def match_yaml(self, origin_path):
-        with open(origin_path) as f:
+        with open(origin_path, encoding="utf-8") as f:
             data = yaml.load(f, Loader=yaml.SafeLoader)
 
         for key, pattern in self.tag_patterns.items():
