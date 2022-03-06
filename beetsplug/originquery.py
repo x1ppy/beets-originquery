@@ -19,6 +19,7 @@ BEETS_TO_LABEL = OrderedDict([
     ('label', 'Record label'),
     ('catalognum', 'Catalog number'),
     ('albumdisambig', 'Edition'),
+    ('original_year', 'Original year'),
 ])
 
 # Conflicts will be reported if any of these fields don't match.
