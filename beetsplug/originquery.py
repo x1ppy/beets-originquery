@@ -233,8 +233,13 @@ class OriginQuery(BeetsPlugin):
         likelies, consensus = current_metadata(task.items)
         task_info['tag_compare'] = tag_compare = OrderedDict()
         for tag in BEETS_TO_LABEL:
+            if tag in likelies.keys():
+                tag_from_mb = str(likelies[tag])
+            else:
+                tag_from_mb = ''
+
             tag_compare.update({tag: {
-                'tagged': str(likelies[tag]),
+                'tagged': tag_from_mb,
                 'active': tag in self.extra_tags,
                 'origin': '',
             }})
