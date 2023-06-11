@@ -268,8 +268,7 @@ class OriginQuery(BeetsPlugin):
 
                 # beets weighs media heavily, and will even prioritize a media match over an exact catalognum match.
                 # At the same time, media for uploaded music is often mislabeled (e.g., Enhanced CD and SACD are just
-                # grouped as CD). This does not make a good combination. As a workaround, remove the media from the
-                # item if we also have a catalognum.
+                # grouped as CD). This does not make a good combination. As a workaround, lower the weight for media
+                # if we also have a catalognum.
                 if item['media'] and item['catalognum']:
-                    del item['media']
-                    tag_compare['media']['active'] = False
+                    config['match']['distance_weights']['media'] = .2
